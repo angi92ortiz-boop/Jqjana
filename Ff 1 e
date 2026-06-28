@@ -1,0 +1,495 @@
+-- EBK FUL SB [PARRA Edition] - 100% Optimized & Secure Mobile Build
+local actualKey = "BACK01"
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+
+local successGui, targetGui = pcall(function() return game:GetService("CoreGui") end)
+local parentGui = (successGui and targetGui) or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+if parentGui:FindFirstChild("Obsidian") then parentGui["Obsidian"]:Destroy() end
+
+local pairs, ipairs, table, task, pcall, typeof = pairs, ipairs, table, task, pcall, typeof
+local Vector2new, Vector3new, UDim2new, Color3fromRGB = Vector2.new, Vector3.new, UDim2.new, Color3.fromRGB
+
+-- Variable de control para evitar fugas de memoria
+local scriptActive = true
+
+-- 1. INTERFAZ DE KEY COMPACTA
+local KeyLibrary = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local KeyWindow = KeyLibrary:CreateWindow({
+    Title = "Verificación",
+    Footer = "king\"parra👑",
+    Icon = 0,
+    NotifySide = "Right",
+    ShowCustomCursor = false
+})
+
+task.spawn(function()
+    for i = 1, 10 do
+        if KeyWindow.Main then
+            KeyWindow.Main.Size = UDim2new(0, 400, 0, 240)
+            break
+        end
+        task.wait(0.05)
+    end
+end)
+
+local KeyTab = KeyWindow:AddTab("KeyHub", "lock")
+local KeyGroup = KeyTab:AddLeftGroupbox("Verificar Key")
+
+KeyGroup:AddInput("KeyTextBox", {
+    Text = "Clave",
+    Default = "",
+    Placeholder = "Ingresa tu key aquí...",
+    ClearTextOnFocus = true
+})
+
+local function LoadMainScript()
+    local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+    local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+    local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+    local Options, Toggles = Library.Options, Library.Toggles
+    local Players, RunService, Lighting, Camera = game:GetService("Players"), game:GetService("RunService"), game:GetService("Lighting"), workspace.CurrentCamera
+    local LocalPlayer = Players.LocalPlayer
+    local Mouse = LocalPlayer:GetMouse()
+
+    local deletedParts, delCount, resCount, originalSpeed = {}, 0, 0, 16
+    local itemCache, connections, CacheESP = {}, {}, {} 
+    local originalDurations = {} 
+
+    local originalAmbient = Lighting.Ambient
+    local originalOutdoor = Lighting.OutdoorAmbient
+
+    if hookmetamethod and checkcaller then
+        local oldIndex; oldIndex = hookmetamethod(game, "__index", function(self, key)
+            if not checkcaller() and typeof(self) == "Instance" and self:IsA("Humanoid") and (key == "WalkSpeed" or key == "walkSpeed") then return 16 end
+            return oldIndex(self, key)
+        end)
+    end
+
+    -- 2. HUD PRINCIPAL
+    local Window = Library:CreateWindow({ 
+        Title = "EBK FUL SB", 
+        Footer = "king\"parra👑", 
+        Icon = 10887413009, 
+        NotifySide = "Right", 
+        ShowCustomCursor = false 
+    })
+
+    task.spawn(function()
+        for i = 1, 10 do
+            if Window.Main then
+                Window.Main.Size = UDim2new(0, 420, 0, 310)
+                break
+            end
+            task.wait(0.05)
+        end
+    end)
+
+    local Tabs = { 
+        Visuales = Window:AddTab("Visuales", "eye"), 
+        Sistema = Window:AddTab("Sistema", "sliders"), 
+        Teleport = Window:AddTab("Teleport", "map-pin"), 
+        Player = Window:AddTab("Player", "user"), 
+        ["UI Settings"] = Window:AddTab("UI Settings", "settings") 
+    }
+
+    --------------------------------------------------------------------------------
+    -- PESTAÑA VISUALES
+    --------------------------------------------------------------------------------
+    local VLeft, VRight = Tabs.Visuales:AddLeftGroupbox("Opciones Visuales"), Tabs.Visuales:AddRightGroupbox("Configuración de Colores")
+    local espToggles = {"Box", "Health", "Name", "Distance", "Skeleton", "Hand", "FullInventory", "Tracer"}
+    for _, v in pairs(espToggles) do VLeft:AddToggle("Esp"..v, { Text = "Esp " .. v:lower(), Default = false }) end
+
+    VRight:AddLabel("Interfaz Color"):AddColorPicker("FrameColor", { Default = Color3fromRGB(40, 40, 40) })
+    VRight:AddLabel("Box color"):AddColorPicker("BoxColor", { Default = Color3fromRGB(255, 0, 0) })
+    VRight:AddLabel("Name color"):AddColorPicker("NameColor", { Default = Color3fromRGB(255, 255, 255) })
+    VRight:AddLabel("Mano color"):AddColorPicker("HandColor", { Default = Color3fromRGB(0, 255, 0) })
+    VRight:AddLabel("Inventario color"):AddColorPicker("FullInvColor", { Default = Color3fromRGB(255, 255, 0) })
+    VRight:AddLabel("Distancia color"):AddColorPicker("DistanceColor", { Default = Color3fromRGB(0, 255, 255) })
+
+    Options.FrameColor:OnChanged(function(v) Library.BackgroundColor = v end)
+
+    local SingleTracer = Drawing.new("Line")
+    SingleTracer.Thickness, SingleTracer.Color, SingleTracer.Visible = 1, Color3fromRGB(255, 0, 0), false
+
+    local function CrearDibujo(clase, props)
+        local d = Drawing.new(clase) for k, v in pairs(props) do d[k] = v end return d
+    end
+
+    local function LimpiarESP(p)
+        local cache = CacheESP[p]
+        if cache then
+            cache.Box.Visible = false; cache.Name.Visible = false; cache.Dist.Visible = false
+            cache.HBarO.Visible = false; cache.HBar.Visible = false; cache.Hand.Visible = false; cache.Inv.Visible = false
+            for _, l in pairs(cache.Skel) do l.Visible = false end
+        end
+    end
+
+    local function EliminarCompletamenteESP(p)
+        if CacheESP[p] then
+            local cache = CacheESP[p]
+            pcall(function() cache.Box:Remove() cache.Name:Remove() cache.Dist:Remove() cache.HBarO:Remove() cache.HBar:Remove() cache.Hand:Remove() cache.Inv:Remove() end)
+            for _, l in pairs(cache.Skel) do pcall(function() l:Remove() end) end
+            CacheESP[p] = nil
+        end
+        itemCache[p] = nil
+    end
+    table.insert(connections, Players.PlayerRemoving:Connect(EliminarCompletamenteESP))
+
+    local function GetItems(p, full)
+        if not p or not p.Character then return full and "Vacío" or "Ninguno" end
+        local cache = itemCache[p]
+        if not cache or tick() - cache.LastUpdate > 0.6 then
+            local c, b, l = p.Character, p:FindFirstChild("Backpack"), {}
+            if c then for _, v in ipairs(c:GetChildren()) do if v:IsA("Tool") then table.insert(l, v) end end end
+            if b and full then for _, v in ipairs(b:GetChildren()) do if v:IsA("Tool") then table.insert(l, v) end end end
+            local handStr = #l > 0 and l[1].Name or "Ninguno"
+            local invStr = ""
+            if #l == 0 then invStr = "Vacío" else for i = 1, #l do invStr = invStr .. "• " .. l[i].Name .. "\n" end end
+            itemCache[p] = { LastUpdate = tick(), Hand = handStr, Inv = invStr }
+            cache = itemCache[p]
+        end
+        return full and cache.Inv or cache.Hand
+    end
+
+    table.insert(connections, RunService.RenderStepped:Connect(function()
+        local targetHead, minD, lChar = nil, math.huge, LocalPlayer.Character
+        local lRoot = lChar and lChar:FindFirstChild("HumanoidRootPart")
+        local cualquierEspActivo = Toggles.EspBox.Value or Toggles.EspHealth.Value or Toggles.EspName.Value or Toggles.EspDistance.Value or Toggles.EspHand.Value or Toggles.EspFullInventory.Value or Toggles.EspSkeleton.Value or Toggles.EspTracer.Value
+        
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                local c = p.Character
+                local r, h = c and c:FindFirstChild("HumanoidRootPart"), c and c:FindFirstChildOfClass("Humanoid")
+                
+                if c and r and h and h.Health > 0 and cualquierEspActivo then
+                    local d = lRoot and (lRoot.Position - r.Position).Magnitude or 0
+                    if d > 550 then LimpiarESP(p) continue end
+                    
+                    if not CacheESP[p] then
+                        CacheESP[p] = {
+                            Box = CrearDibujo("Square", {Filled = false, Thickness = 1}),
+                            Name = CrearDibujo("Text", {Center = true, Size = 13, Outline = true}),
+                            Dist = CrearDibujo("Text", {Center = true, Size = 12, Outline = true}),
+                            HBarO = CrearDibujo("Line", {Thickness = 3, Color = Color3.new(0,0,0)}),
+                            HBar = CrearDibujo("Line", {Thickness = 1}),
+                            Hand = CrearDibujo("Text", {Center = true, Size = 12, Outline = true}),
+                            Inv = CrearDibujo("Text", {Center = false, Size = 11, Outline = true}),
+                            Skel = {H2T = CrearDibujo("Line", {Thickness = 1}), T2LA = CrearDibujo("Line", {Thickness = 1}), T2RA = CrearDibujo("Line", {Thickness = 1}), T2LL = CrearDibujo("Line", {Thickness = 1}), T2RL = CrearDibujo("Line", {Thickness = 1})}
+                        }
+                    end
+                    
+                    local v, vis = Camera:WorldToViewportPoint(r.Position)
+                    local cache = CacheESP[p]
+                    
+                    if vis then
+                        local head = c:FindFirstChild("Head")
+                        if d < minD then minD = d; targetHead = head end
+                        
+                        local sHead = Camera:WorldToViewportPoint(head and head.Position + Vector3new(0, 1.6, 0) or r.Position + Vector3new(0, 3, 0))
+                        local sFeet = Camera:WorldToViewportPoint(r.Position - Vector3new(0, 3, 0))
+                        local hH, wW = math.abs(sHead.Y - sFeet.Y), math.abs(sHead.Y - sFeet.Y) * 0.55
+                        local pX, pY = v.X - (wW / 2), sHead.Y
+                        
+                        cache.Box.Visible = Toggles.EspBox.Value
+                        if cache.Box.Visible then cache.Box.Size, cache.Box.Position, cache.Box.Color = Vector2new(wW, hH), Vector2new(pX, pY), Options.BoxColor.Value end
+                        
+                        cache.HBar.Visible = Toggles.EspHealth.Value; cache.HBarO.Visible = Toggles.EspHealth.Value
+                        if cache.HBar.Visible then
+                            local pct = h.Health / h.MaxHealth
+                            cache.HBarO.From, cache.HBarO.To = Vector2new(pX - 5, pY), Vector2new(pX - 5, pY + hH)
+                            cache.HBar.From, cache.HBar.To = Vector2new(pX - 5, pY + hH), Vector2new(pX - 5, (pY + hH) - (hH * pct))
+                            cache.HBar.Color = Color3.fromHSV(pct * 0.33, 1, 1)
+                        end
+                        
+                        cache.Name.Visible = Toggles.EspName.Value
+                        if cache.Name.Visible then cache.Name.Position, cache.Name.Text, cache.Name.Color = Vector2new(v.X, pY - 15), p.Name, Options.NameColor.Value end
+                        
+                        local bY = hH + pY + 2
+                        cache.Dist.Visible = Toggles.EspDistance.Value
+                        if cache.Dist.Visible then cache.Dist.Position, cache.Dist.Text, cache.Dist.Color = Vector2new(v.X, bY), "[" .. math.floor(d) .. "m]", Options.DistanceColor.Value; bY = bY + 13 end
+                        
+                        cache.Hand.Visible = Toggles.EspHand.Value
+                        if cache.Hand.Visible then cache.Hand.Position, cache.Hand.Text, cache.Hand.Color = Vector2new(v.X, bY), GetItems(p, false), Options.HandColor.Value; bY = bY + 13 end
+                        
+                        cache.Inv.Visible = Toggles.EspFullInventory.Value
+                        if cache.Inv.Visible then cache.Inv.Position, cache.Inv.Text, cache.Inv.Color = Vector2new(pX + wW + 6, pY), GetItems(p, true), Options.FullInvColor.Value end
+                        
+                        local sk = cache.Skel
+                        if Toggles.EspSkeleton.Value then
+                            local t = c:FindFirstChild("Torso") or c:FindFirstChild("UpperTorso")
+                            local la, ra = c:FindFirstChild("Left Arm") or c:FindFirstChild("LeftHand"), c:FindFirstChild("Right Arm") or c:FindFirstChild("RightHand")
+                            local ll, rl = c:FindFirstChild("Left Leg") or c:FindFirstChild("LeftFoot"), c:FindFirstChild("Right Leg") or c:FindFirstChild("RightFoot")
+                            if head and t and la and ra and ll and rl then
+                                local hV, tV, laV, raV, llV, rlV = Camera:WorldToViewportPoint(head.Position), Camera:WorldToViewportPoint(t.Position), Camera:WorldToViewportPoint(la.Position), Camera:WorldToViewportPoint(ra.Position), Camera:WorldToViewportPoint(ll.Position), Camera:WorldToViewportPoint(rl.Position)
+                                if hV.Z > 0 and tV.Z > 0 and laV.Z > 0 and raV.Z > 0 and llV.Z > 0 and rlV.Z > 0 then
+                                    sk.H2T.From, sk.H2T.To = Vector2new(hV.X, hV.Y), Vector2new(tV.X, tV.Y)
+                                    sk.T2LA.From, sk.T2LA.To = Vector2new(tV.X, tV.Y), Vector2new(laV.X, laV.Y)
+                                    sk.T2RA.From, sk.T2RA.To = Vector2new(tV.X, tV.Y), Vector2new(raV.X, raV.Y)
+                                    sk.T2LL.From, sk.T2LL.To = Vector2new(tV.X, tV.Y), Vector2new(llV.X, llV.Y)
+                                    sk.T2RL.From, sk.T2RL.To = Vector2new(tV.X, tV.Y), Vector2new(rlV.X, rlV.Y)
+                                    for _, l in pairs(sk) do l.Color = Options.BoxColor.Value; l.Visible = true end
+                                else for _, l in pairs(sk) do l.Visible = false end end
+                            end
+                        else for _, l in pairs(sk) do l.Visible = false end end
+                    else LimpiarESP(p) end
+                else LimpiarESP(p) end
+            end
+        end
+        
+        if Toggles.EspTracer.Value and targetHead and lChar then
+            local myHead = lChar:FindFirstChild("Head")
+            if myHead then
+                local myHeadScreen, myVis = Camera:WorldToViewportPoint(myHead.Position)
+                local targetHeadScreen, tarVis = Camera:WorldToViewportPoint(targetHead.Position)
+                if myHeadScreen.Z > 0 and targetHeadScreen.Z > 0 then
+                    SingleTracer.From = Vector2new(myHeadScreen.X, myHeadScreen.Y)
+                    SingleTracer.To = Vector2new(targetHeadScreen.X, targetHeadScreen.Y)
+                    SingleTracer.Visible = true
+                else SingleTracer.Visible = false end
+            else SingleTracer.Visible = false end
+        else SingleTracer.Visible = false end
+    end))
+
+    --------------------------------------------------------------------------------
+    -- PESTAÑA SISTEMA (100% MEJORADA)
+    --------------------------------------------------------------------------------
+    local SLeft = Tabs.Sistema:AddLeftGroupbox("Utilidades")
+
+    SLeft:AddSlider("SpeedSlider", { Text = "Velocidad", Default = 16, Min = 16, Max = 23, Rounding = 0 })
+    SLeft:AddToggle("SpeedHackToggle", { Text = "Activar Velocidad", Default = false })
+    table.insert(connections, RunService.RenderStepped:Connect(function()
+        local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if h then h.WalkSpeed = Toggles.SpeedHackToggle.Value and Options.SpeedSlider.Value or originalSpeed end
+    end))
+
+    SLeft:AddToggle("InstantInteractToggle", { Text = "Instant Interact", Default = false })
+    table.insert(connections, game:GetService("ProximityPromptService").PromptShown:Connect(function(prompt)
+        if not originalDurations[prompt] then originalDurations[prompt] = prompt.HoldDuration end
+        if Toggles.InstantInteractToggle and Toggles.InstantInteractToggle.Value then
+            prompt.HoldDuration = 0
+        end
+    end))
+    
+    Toggles.InstantInteractToggle:OnChanged(function(state)
+        if not state then
+            for prompt, duration in pairs(originalDurations) do
+                if prompt and prompt.Parent then prompt.HoldDuration = duration end
+            end
+        end
+    end)
+
+    -- OPTIMIZACIÓN MÁXIMA NO RECOIL: Por detección de equipación nativa (0% Lag)
+    SLeft:AddToggle("NoRecoilToggle", { Text = "No Recoil", Default = false })
+    
+    local function AplicarNoRecoil(tool)
+        if tool:IsA("Tool") and Toggles.NoRecoilToggle.Value then
+            local settingsFolder = tool:FindFirstChild("Recoil") or tool:FindFirstChild("Configuration") or tool
+            for _, v in ipairs(settingsFolder:GetDescendants()) do
+                if v:IsA("NumberValue") or v:IsA("IntValue") then
+                    local n = v.Name:lower()
+                    if n:find("recoil") or n:find("kick") or n:find("spread") then
+                        v.Value = 0
+                    end
+                end
+            end
+        end
+    end
+
+    local function SetupCharacterNoRecoil(char)
+        if char then
+            table.insert(connections, char.ChildAdded:Connect(AplicarNoRecoil))
+            local currentTool = char:FindFirstChildOfClass("Tool")
+            if currentTool then AplicarNoRecoil(currentTool) end
+        end
+    end
+
+    table.insert(connections, LocalPlayer.CharacterAdded:Connect(SetupCharacterNoRecoil))
+    SetupCharacterNoRecoil(LocalPlayer.Character)
+
+    SLeft:AddToggle("FullBrilloToggle", { Text = "Full Brillo", Default = false })
+    Toggles.FullBrilloToggle:OnChanged(function(state)
+        if state then
+            Lighting.Ambient = Color3fromRGB(255, 255, 255)
+            Lighting.OutdoorAmbient = Color3fromRGB(255, 255, 255)
+        else
+            Lighting.Ambient = originalAmbient
+            Lighting.OutdoorAmbient = originalOutdoor
+        end
+    end)
+
+    SLeft:AddDivider()
+
+    SLeft:AddToggle("DeleteToolToggle", { Text = "Herramienta Borrar Paredes", Default = false })
+    local lblParedes = SLeft:AddLabel("Eliminados: 0 | Restaurados: 0")
+
+    local visualBox = Instance.new("SelectionBox")
+    visualBox.Name = "KingDeleteVisual"
+    visualBox.Parent = (successGui and targetGui) or LocalPlayer:WaitForChild("PlayerGui")
+    visualBox.Transparency = 0.4
+    visualBox.Color3 = Color3fromRGB(255, 255, 255)  
+    visualBox.SurfaceColor3 = Color3fromRGB(255, 0, 0) 
+
+    local bTool = Instance.new("Tool")
+    bTool.Name = "Borrador de Paredes"; bTool.RequiresHandle = false
+
+    table.insert(connections, RunService.RenderStepped:Connect(function()
+        if bTool.Parent == LocalPlayer.Character then
+            local t = Mouse.Target
+            if t and not t:IsA("Terrain") and not t:FindFirstAncestorOfClass("Tool") then
+                local model = t:FindFirstAncestorOfClass("Model")
+                if not model or not model:FindFirstChildOfClass("Humanoid") then
+                    visualBox.Adornee = t
+                    return
+                end
+            end
+        end
+        visualBox.Adornee = nil
+    end))
+
+    table.insert(connections, bTool.Activated:Connect(function()
+        local t = Mouse.Target
+        if visualBox.Adornee and t == visualBox.Adornee then
+            table.insert(deletedParts, {part = t, parent = t.Parent})
+            t.Parent = nil; delCount = delCount + 1
+            lblParedes:SetText("Eliminados: " .. delCount .. " | Restaurados: " .. resCount)
+        end
+    end))
+
+    Toggles.DeleteToolToggle:OnChanged(function(v) bTool.Parent = v and LocalPlayer.Backpack or nil end)
+
+    SLeft:AddButton({ Text = "Restaurar paredes (1 por 1)", Func = function()
+        if #deletedParts > 0 then
+            local data = table.remove(deletedParts)
+            if data and data.part then data.part.Parent = data.parent; resCount = resCount + 1; lblParedes:SetText("Eliminados: " .. delCount .. " | Restaurados: " .. resCount) end
+        end
+    end})
+
+    SLeft:AddButton({ Text = "SUPER BOOST FPS EXTREMO", Func = function()
+        Lighting.GlobalShadows, Lighting.FogEnd, settings().Rendering.QualityLevel = false, 9e9, 1
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("Decal") or v:IsA("Texture") then v:Destroy()
+            elseif v:IsA("PostEffect") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Sparkles") then v.Enabled = false
+            elseif v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic; v.CastShadow = false end
+        end
+        for _, v in pairs(Lighting:GetChildren()) do
+            if v:IsA("Atmosphere") or v:IsA("Clouds") or v:IsA("Sky") then v:Destroy() end
+        end
+        Library:Notify({ Title = "Optimización", Description = "Texturas purgadas con éxito.", Time = 3 })
+    end})
+
+    --------------------------------------------------------------------------------
+    -- PESTAÑA TELEPORT
+    --------------------------------------------------------------------------------
+    local TLeft, TRight = Tabs.Teleport:AddLeftGroupbox("Ubicaciones"), Tabs.Teleport:AddRightGroupbox("Cargar Scripts")
+    local locs = { ["Ubicación 1"] = Vector3new(519.27, 3.59, 606.96), ["Ubicación 2"] = Vector3new(741.76, 3.71, 433.77), ["Ubicación 3"] = Vector3new(217.39, 3.74, -174.63), ["Ubicación 4"] = Vector3new(85.18, 3.76, 38.44), ["Ubicación 5"] = Vector3new(1016.6, 3.61, -327.68), ["Ubicación 6"] = Vector3new(1213.24, 3.36, -47.72), ["Ubicación 7"] = Vector3new(1140.63, 10.11, 421.04), ["Ubicación 8"] = Vector3new(-463.24, 3.86, 358.16), ["Ubicación 9"] = Vector3new(985.76, 10.11, 248.31), ["Ubicación 10"] = Vector3new(925.26, 10.11, 40.25), ["Ubicación 11"] = Vector3new(896.53, 10.11, 41.55), ["Ubicación 12"] = Vector3new(-473.69, 3.86, -460.23), ["Ubicación 13"] = Vector3new(-769.51, 3.66, -179.22) }
+
+    local lNames = {} for k in pairs(locs) do table.insert(lNames, k) end table.sort(lNames)
+    TLeft:AddDropdown("TpDropdown", { Values = lNames, Default = 1, Text = "Seleccionar Ubicación" })
+    TLeft:AddButton({ Text = "Teletransportarse", Func = function()
+        local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if h and h.SeatPart and (h.SeatPart:IsA("VehicleSeat") or h.SeatPart.Name:lower():find("moto")) then
+            local pos = locs[Options.TpDropdown.Value]
+            local m = h.SeatPart:FindFirstAncestorOfClass("Model")
+            if m then m:PivotTo(CFrame.new(pos)) else h.SeatPart.CFrame = CFrame.new(pos) end
+        else Library:Notify({ Title = "Error", Description = "¡Debes estar sentado en una moto!", Time = 4 }) end
+    end})
+
+    TRight:AddLabel("⚠️ Requiere ejecución limpia", true)
+    TRight:AddButton({ Text = "Cargar Aimbot Aurora", Func = function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Aurora-Script/Script/refs/heads/main/ScriptSb"))() end) end })
+    TRight:AddButton({ Text = "Cargar Farm V1", Func = function() pcall(function() loadstring(game:HttpGet("https://github.com/angi92ortiz-boop/EBK-FULL/raw/refs/heads/main/Autofarmeo%201%20key%202"))() end) end })
+
+    --------------------------------------------------------------------------------
+    -- PESTAÑA PLAYER
+    --------------------------------------------------------------------------------
+    local PLeft = Tabs.Player:AddLeftGroupbox("Name Changer")
+    PLeft:AddToggle("EnableNameChange", { Text = "Enable Name Changer", Default = false })
+    PLeft:AddInput("TopName", { Text = "Top Name", Default = "Laparra091" })
+    PLeft:AddInput("BottomName", { Text = "Bottom Name", Default = "Uhh X las huevas" })
+
+    -- Reparado: El bucle ahora frena inmediatamente al descargar el Script
+    task.spawn(function()
+        while scriptActive and task.wait(0.3) do 
+            if Toggles.EnableNameChange and Toggles.EnableNameChange.Value and LocalPlayer.Character then
+                local char = LocalPlayer.Character
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then hum.DisplayName = Options.TopName.Value end
+                
+                local head = char:FindFirstChild("Head")
+                if head then
+                    for _, gui in ipairs(head:GetChildren()) do
+                        if gui:IsA("BillboardGui") then
+                            for _, textLabel in ipairs(gui:GetDescendants()) do
+                                if textLabel:IsA("TextLabel") then
+                                    local labelName = textLabel.Name:lower()
+                                    if labelName:find("clan") or labelName:find("crew") or labelName:find("bottom") then
+                                        if textLabel.Text ~= Options.BottomName.Value then textLabel.Text = Options.BottomName.Value end
+                                    else
+                                        if textLabel.Text ~= Options.TopName.Value and not textLabel.Text:find(Options.BottomName.Value) then textLabel.Text = Options.TopName.Value end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    --------------------------------------------------------------------------------
+    -- PESTAÑA UI SETTINGS
+    --------------------------------------------------------------------------------
+    local Menu = Tabs["UI Settings"]:AddLeftGroupbox("Menu")
+    Menu:AddToggle("KeybindMenuOpen", { Default = Library.KeybindFrame.Visible, Text = "Open Keybind Menu", Callback = function(v) Library.KeybindFrame.Visible = v end })
+    Menu:AddDropdown("NotificationSide", { Values = { "Left", "Right" }, Default = "Right", Text = "Notification Side", Callback = function(v) Library:SetNotifySide(v) end })
+    Menu:AddDropdown("DPIDropdown", { Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" }, Default = "100%", Text = "DPI Scale", Callback = function(v) Library:SetDPIScale(tonumber(v:gsub("%%", ""))) end })
+    Menu:AddSlider("CornerSlider", { Text = "Corner Radius", Default = Library.CornerRadius, Min = 0, Max = 20, Rounding = 0, Callback = function(v) Window:SetCornerRadius(v) end })
+    Menu:AddDivider()
+    Menu:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
+
+    Menu:AddButton("Unload", function() 
+        scriptActive = false -- Rompe hilos en ejecución en paralelo
+        for i = 1, #connections do pcall(function() connections[i]:Disconnect() end) end
+        if SingleTracer then pcall(function() SingleTracer:Remove() end) end
+        if visualBox then pcall(function() visualBox:Destroy() end) end
+        if bTool then pcall(function() bTool:Destroy() end) end
+        for p, _ in pairs(CacheESP) do pcall(function() EliminarCompletamenteESP(p) end) end
+        Library:Unload() 
+    end)
+    Library.ToggleKeybind = Options.MenuKeybind
+
+    ThemeManager:SetLibrary(Library); SaveManager:SetLibrary(Library)
+    SaveManager:IgnoreThemeSettings(); SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+    ThemeManager:SetFolder("KingHub"); SaveManager:SetFolder("KingHub/configs")
+    SaveManager:BuildConfigSection(Tabs["UI Settings"]); ThemeManager:ApplyToTab(Tabs["UI Settings"])
+    SaveManager:LoadAutoloadConfig()
+end
+
+-- CONTROLADORES DE VERIFICACIÓN
+KeyGroup:AddButton({
+    Text = "Verificar Key",
+    Func = function()
+        if KeyLibrary.Options.KeyTextBox.Value == actualKey then
+            KeyLibrary:Notify({ Title = "Éxito", Description = "Clave correcta. Abriendo menú...", Time = 2 })
+            task.wait(0.8)
+            KeyLibrary:Unload()
+            task.wait(0.1)
+            LoadMainScript()
+        else
+            KeyLibrary:Notify({ Title = "Error", Description = "Key Incorrecta.", Time = 3 })
+        end
+    end
+})
+
+KeyGroup:AddButton({
+    Text = "Obtener Key",
+    Func = function()
+        if setclipboard then
+            setclipboard("https://link-to-your-key-system.com")
+            KeyLibrary:Notify({ Title = "Copiado", Description = "Enlace copiado con éxito.", Time = 2 })
+        else
+            KeyLibrary:Notify({ Title = "Aviso", Description = "Portapapeles no soportado.", Time = 3 })
+        end
+    end
+})
