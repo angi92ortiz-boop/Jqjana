@@ -486,7 +486,7 @@ KeyGroup:AddButton({
     Text = "Obtener Key",
     Func = function()
         if setclipboard then
-            setclipboard("https://link-to-your-key-system.com")
+            setclipboard("BACK01")
             KeyLibrary:Notify({ Title = "Copiado", Description = "Enlace copiado con éxito.", Time = 2 })
         else
             KeyLibrary:Notify({ Title = "Aviso", Description = "Portapapeles no soportado.", Time = 3 })
